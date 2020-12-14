@@ -1,10 +1,8 @@
-﻿################################################################################
-# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
-################################################################################
-
+﻿.gitignore
 /.vs
 *.dev.sh
 /VeraAlexa/S_Volume1.xml
 .editorconfig
+.editorconfig.*
 /VirtualDevices/I_VirtualWindowCover.xml
 /VeraAlexa/VeraAlexa

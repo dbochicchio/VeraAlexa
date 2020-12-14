@@ -1,7 +1,7 @@
 module("L_VeraAlexa1", package.seeall)
 
 local _PLUGIN_NAME = "VeraAlexa"
-local _PLUGIN_VERSION = "0.2.12"
+local _PLUGIN_VERSION = "0.9.0"
 
 local debugMode = false
 local openLuup = false
@@ -15,15 +15,15 @@ local TASK_BUSY = 1
 local masterID = -1
 
 -- SIDs
-local MYSID								 = "urn:bochicchio-com:serviceId:VeraAlexa1"
-local HASID								 = "urn:micasaverde-com:serviceId:HaDevice1"
+local MYSID									= "urn:bochicchio-com:serviceId:VeraAlexa1"
+local HASID									= "urn:micasaverde-com:serviceId:HaDevice1"
 
 -- COMMANDS
 local COMMANDS_SPEAK						= "-e speak:'%s' -d %q"
 local COMMANDS_ROUTINE						= "-e automation:\"%s\" -d %q"
 local COMMANDS_SETVOLUME					= "-e vol:%s -d %q"
 local COMMANDS_GETVOLUME					= "-q -d %q | sed ':a;N;$!ba;s/\\n/ /g' | grep 'volume' | sed -r 's/^.*\"volume\":\\s*([0-9]+)[^0-9]*$/\\1/g'"
-local BIN_PATH							  = "/storage/alexa"
+local BIN_PATH								= "/storage/alexa"
 local SCRIPT_NAME							= "alexa_remote_control_plain.sh"
 local SCRIPT_NAME_ADV						= "alexa_remote_control.sh"
 
@@ -66,15 +66,29 @@ local function dump(t, seen)
 	return str
 end
 
+local function getVarNumeric(sid, name, dflt, devNum)
+	local s = luup.variable_get(sid, name, devNum) or ""
+	if s == "" then return dflt end
+	s = tonumber(s)
+	return (s == nil) and dflt or s
+end
+
+local function getVar(sid, name, dflt, devNum)
+	local s = luup.variable_get(sid, name, devNum) or ""
+	if s == "" then return dflt end
+	return (s == nil) and dflt or s
+end
+
 local function L(msg, ...) -- luacheck: ignore 212
-	local str
+	local str = string.format("%s[%s@%s]", _PLUGIN_NAME, _PLUGIN_VERSION, masterID)
 	local level = 50
 	if type(msg) == "table" then
-		str = tostring(msg.prefix or _PLUGIN_NAME) .. ": " .. tostring(msg.msg)
+		str = string.format("%s%s:%s", str, msg.prefix or _PLUGIN_NAME, msg.msg)
 		level = msg.level or level
 	else
-		str = _PLUGIN_NAME .. ": " .. tostring(msg)
+		str = string.format("%s:%s", str, msg)
 	end
+	
 	str = string.gsub(str, "%%(%d+)", function(n)
 		n = tonumber(n, 10)
 		if n < 1 or n > #arg then return "nil" end
@@ -84,18 +98,11 @@ local function L(msg, ...) -- luacheck: ignore 212
 		elseif type(val) == "string" then
 			return string.format("%q", val)
 		elseif type(val) == "number" and math.abs(val - os.time()) <= 86400 then
-			return tostring(val) .. "(" .. os.date("%x.%X", val) .. ")"
+			return string.format("%s(%s)", val, os.date("%x.%X", val))
 		end
 		return tostring(val)
 	end)
 	luup.log(str, level)
-end
-
-local function getVarNumeric(sid, name, dflt, dev)
-	local s = luup.variable_get(sid, name, dev) or ""
-	if s == "" then return dflt end
-	s = tonumber(s)
-	return (s == nil) and dflt or s
 end
 
 local function D(msg, ...)
@@ -103,27 +110,21 @@ local function D(msg, ...)
 
 	if debugMode then
 		local t = debug.getinfo(2)
-		local pfx = _PLUGIN_NAME .. "(" .. tostring(t.name) .. "@" ..
-						tostring(t.currentline) .. ")"
-		L({msg = msg, prefix = pfx}, ...)
+		local pfx = string.format("(%s@%s)", t.name or "", t.currentline or "")
+		L(devNum, {msg = msg, prefix = pfx}, ...)
 	end
 end
 
-local function setVar(sid, name, val, dev)
+-- Set variable, only if value has changed.
+local function setVar(sid, name, val, devNum)
 	val = (val == nil) and "" or tostring(val)
-	local s = luup.variable_get(sid, name, dev) or ""
-	D("setVar(%1,%2,%3,%4) old value %5", sid, name, val, dev, s)
+	local s = luup.variable_get(sid, name, devNum) or ""
+	D(devNum, "setVar(%1,%2,%3,%4) old value %5", sid, name, val, devNum, s)
 	if s ~= val then
-		luup.variable_set(sid, name, val, dev)
+		luup.variable_set(sid, name, val, devNum)
 		return true, s
 	end
 	return false, s
-end
-
-local function getVar(sid, name, dflt, dev)
-	local s = luup.variable_get(sid, name, dev) or ""
-	if s == "" then return dflt end
-	return (s == nil) and dflt or s
 end
 
 local function split(str, sep)
@@ -392,6 +393,12 @@ function setupScripts()
 	-- TODO: fix this and use lfs
 	-- lfs.attributes(BIN_PATH .. "/alexa_remote_control.sh", {permissions = "777"})
 
+	-- install jq
+	local currentVer = tonumber(luup.short_version or "1")
+	if not openLuup and currentVer >= 7.32 then
+		os.execute("opkg --force-depends install jq")
+	end
+
 	-- first command must be executed to create cookie and setup the environment
 	executeCommand(buildCommand({}))
 
@@ -406,8 +413,8 @@ end
 function startPlugin(devNum)
 	masterID = devNum
 
-	L("Plugin starting: %1 - %2", _PLUGIN_NAME, _PLUGIN_VERSION)
-
+	L("Plugin starting")
+	
 	-- detect OpenLuup
 	for k,v in pairs(luup.devices) do
 		if v.device_type == "openLuup" then
@@ -427,7 +434,9 @@ function startPlugin(devNum)
 		D("jq: true")
 	else
 		-- notify the user to install jq
-		if openLuup then
+		local currentVer = tonumber(luup.short_version or "1")
+
+		if openLuup or currentVer >= 7.32 then
 			deviceMessage(masterID, 'Please install jq package.', true, 0)
 		end
 
@@ -471,7 +480,7 @@ function startPlugin(devNum)
 	local vers = initVar(MYSID, "CurrentVersion", "0", masterID)
 	if vers ~= _PLUGIN_VERSION then
 		-- new version, let's reload the script again
-		L("New versione detected: reconfiguration in progress")
+		L("New version detected: reconfiguration in progress")
 		setVar(HASID, "Configured", 0, masterID)
 		setVar(MYSID, "CurrentVersion", _PLUGIN_VERSION, masterID)
 	end
