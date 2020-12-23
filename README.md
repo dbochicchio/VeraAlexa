@@ -130,6 +130,11 @@ luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1",
    "RunCommand",
    {Command="-e weather -d 'Bedroom'"}, 666)
 
+-- execute a spoken command on Bedroom device
+luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1",
+   "RunCommand",
+   {Command="-e textcommand:'Alexa, I’m leaving' -d 'Bedroom'"}, 666)
+
 -- sounds - see https://developer.amazon.com/en-US/docs/alexa/custom-skills/ask-soundlibrary.html
 luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1",
    "RunCommand",
@@ -146,10 +151,25 @@ luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1","Say",
    {Text='<voice name="Amy"><lang xml:lang="en-GB">Hello from Vera Alexa</lang></voice>',
 	Volume=50, GroupZones="Bedroom", Repeat = 3}, 666)
 
+-- different styles -- see https://developer.amazon.com/en-US/blogs/alexa/alexa-skills-kit/2020/11/alexa-speaking-styles-emotions-now-available-additional-languages
+
+luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1","Say",
+   {Text='<voice name="Amy"><lang xml:lang="en-GB">Hello from Vera Alexa</lang></voice>',
+	Volume=50, GroupZones="Bedroom", Repeat = 3}, 666)
+
 -- different language using a custom voice
 luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1","Say",
-   {Text='<voice name="Carla"><lang xml:lang="it-IT">Ciao da Vera Alexa</lang></voice>',
-   Volume=50, GroupZones="Bedroom", Repeat = 3}, 666)
+   {Text='<lang xml:lang="it-IT"><amazon:domain name="conversational">Ciao, da Vera Alexa</amazon:domain></lang></voice>',
+   Volume=50, GroupZones="Bedroom", Repeat = 1}, 666)
+
+luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1","Say",
+   {Text='<amazon:domain name="music">Sweet Child O’ Mine by Guns N’ Roses became one of their most successful singles, topping the Billboard Hot 100 in 1988. Slash’s guitar solo on this song was ranked the 37th greatest solo of all time. Here’s Sweet Child O’ Mine.</amazon:domain>',
+   Volume=50, GroupZones="Bedroom", Repeat = 1}, 666)
+
+luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1","Say",
+   {Text='<amazon:domain name="conversational">I really didn’t know how this morning was going to start. And if I had known, I think I might have just stayed in bed.</amazon:domain>',
+   Volume=50, GroupZones="Bedroom", Repeat = 1}, 666)
+
 ```
 
 # OpenLuup/AltUI
