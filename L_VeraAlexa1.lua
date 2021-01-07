@@ -297,7 +297,8 @@ local function buildCommand(devNum, settings)
 										BIN_PATH, BIN_PATH,
 										(settings.Text or "Test"),
 										(settings.GroupZones or settings.GroupDevices or defaultDevice))
-	D(devNum, command)
+	--D(devNum, command)
+
 	-- reset onetimepass
 	setVar(MYSID, "OneTimePassCode", "", devNum)
 	return command
