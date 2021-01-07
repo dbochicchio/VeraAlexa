@@ -261,7 +261,7 @@ local function safeCall(devNum, call)
 end
 
 local function executeCommand(devNum, command)
-	return safeCall(function()
+	return safeCall(devNum, function()
 		local response = os.capture(command)
 
 		-- set failure
