@@ -1,7 +1,7 @@
 module("L_VeraAlexa1", package.seeall)
 
 local _PLUGIN_NAME = "VeraAlexa"
-local _PLUGIN_VERSION = "0.9.0"
+local _PLUGIN_VERSION = "0.91"
 
 local debugMode = false
 local openLuup = false
@@ -11,8 +11,6 @@ local TASK_ERROR = 2
 local TASK_ERROR_PERM = -2
 local TASK_SUCCESS = 4
 local TASK_BUSY = 1
-
-local masterID = -1
 
 -- SIDs
 local MYSID									= "urn:bochicchio-com:serviceId:VeraAlexa1"
@@ -79,8 +77,8 @@ local function getVar(sid, name, dflt, devNum)
 	return (s == nil) and dflt or s
 end
 
-local function L(msg, ...) -- luacheck: ignore 212
-	local str = string.format("%s[%s@%s]", _PLUGIN_NAME, _PLUGIN_VERSION, masterID)
+local function L(devNum, msg, ...) -- luacheck: ignore 212
+	local str = string.format("%s[%s@%s]", _PLUGIN_NAME, _PLUGIN_VERSION, devNum)
 	local level = 50
 	if type(msg) == "table" then
 		str = string.format("%s%s:%s", str, msg.prefix or _PLUGIN_NAME, msg.msg)
@@ -105,8 +103,8 @@ local function L(msg, ...) -- luacheck: ignore 212
 	luup.log(str, level)
 end
 
-local function D(msg, ...)
-	debugMode = getVarNumeric(MYSID, "DebugMode", 0, masterID) == 1
+local function D(devNum, msg, ...)
+	debugMode = getVarNumeric(MYSID, "DebugMode", 0, devNum) == 1
 
 	if debugMode then
 		local t = debug.getinfo(2)
@@ -162,10 +160,10 @@ local function initVar(sid, name, dflt, dev)
 	return currVal
 end
 
-function deviceMessage(devID, message, error, timeout)
+function deviceMessage(devNum, message, error, timeout)
 	local status = error and 2 or 4
 	timeout = timeout or 15
-	D("deviceMessage(%1,%2,%3,%4)", devID, message, error, timeout)
+	D(devNum, "deviceMessage(%1,%2,%3,%4)", devNum, message, error, timeout)
 	luup.device_message(devID, status, message, timeout, _PLUGIN_NAME)
 end
 
@@ -194,39 +192,42 @@ end
 -- ** PLUGIN CODE **
 local ttsQueue = {}
 
-function checkQueue(device)
-	local device = tonumber(device)
+function checkQueue(devNum)
+	devNum = tonumber(devNum)
 
-	if ttsQueue[device] == nil then ttsQueue[device] = {} end
-	D("checkQueue: %1 - %2 in queue", device, #ttsQueue[device])
+	if ttsQueue[devNum] == nil then ttsQueue[devNum] = {} end
+
+	D(devNum, "checkQueue: %1 in queue", #ttsQueue[devNum])
 	
 	-- is queue now empty?
-	if #ttsQueue[device] == 0 then
-		D("checkQueue: %1 - queue is empty", device)
+	if #ttsQueue[devNum] == 0 then
+		D(devNum, "checkQueue: queue is empty")
 		return true
 	end
 
-	D("checkQueue: %1 - play next", device)
+	D(devNum, "checkQueue: play next")
 
 	-- get the next one
-	sayTTS(device, ttsQueue[device][1])
+	sayTTS(devNum, ttsQueue[devNum][1])
 	
 	-- remove from queue
-	table.remove(ttsQueue[device], 1)
+	table.remove(ttsQueue[devNum], 1)
 end
 
-function addToQueue(device, settings)
-	L("addToQueue: added to queue for %1", device)
-	if ttsQueue[device] == nil then ttsQueue[device] = {} end
+function addToQueue(devNum, settings)
+	devNum = tonumber(devNum)
 
-	local defaultBreak = getVar(MYSID, "DefaultBreak", 3, masterID)
+	L(devNum, "addToQueue(%1)", settings)
+	if ttsQueue[devNum] == nil then ttsQueue[devNum] = {} end
 
-	local startPlaying = #ttsQueue[device] == 0
+	local defaultBreak = getVar(MYSID, "DefaultBreak", 3, devNum)
+
+	local startPlaying = #ttsQueue[devNum] == 0
 
 	local howMany = tonumber(settings.Repeat or 1)
-	D('addToQueue: before: %1', #ttsQueue[device])
+	D(devNum, 'addToQueue(2): %1 - %2', #ttsQueue[devNum], startPlaying)
 
-	local useAnnoucements = getVarNumeric(MYSID, "UseAnnoucements", 0, masterID)
+	local useAnnoucements = getVarNumeric(MYSID, "UseAnnoucements", 0, devNum)
 	if useAnnoucements == 1 then
 		-- no need to repeat, just concatenate
 		local text = ""
@@ -235,56 +236,57 @@ function addToQueue(device, settings)
 		end
 		settings.Text = text
 
-		table.insert(ttsQueue[device], settings)
+		table.insert(ttsQueue[devNum], settings)
 	else
 		for f = 1, howMany do
-			table.insert(ttsQueue[device], settings)
+			table.insert(ttsQueue[devNum], settings)
 		end
 	end
-	D('addToQueue: after: %1', #ttsQueue[device])
+	D(devNum, 'addToQueue(3): %1', #ttsQueue[devNum])
 
-	if (startPlaying) then
-		checkQueue(device)
+	if startPlaying then
+		D(devNum, 'addToQueue(4): playing')
+		checkQueue(devNum)
 	end
 end
 
-local function safeCall(call)
+local function safeCall(devNum, call)
 	local function err(x)
 		local s = string.dump(call)
-		D('Error: %s - %s', x, s)
+		D(devNum, 'Error: %s - %s', x, s)
 	end
 
 	local s, r, e = xpcall(call, err)
 	return r
 end
 
-local function executeCommand(command)
+local function executeCommand(devNum, command)
 	return safeCall(function()
 		local response = os.capture(command)
 
 		-- set failure
 		local hasError = (response:find("ERROR: Amazon Login was unsuccessful.") or -1)>0
-		setVar(HASID, "CommFailure", (hasError and 2 or 0), masterID)
+		setVar(HASID, "CommFailure", (hasError and 2 or 0), devNum)
 
 		-- lastresponse
-		setVar(MYSID, "LatestResponse", response, masterID)
-		D("Response from Alexa.sh: %1", response)
+		setVar(MYSID, "LatestResponse", response, devNum)
+		D(devNum, "Response from Alexa.sh: %1", response)
 
 		return response
 	end)
 end
 
-local function buildCommand(settings)
+local function buildCommand(devNum, settings)
 	local args = "export EMAIL=%q && export PASSWORD=%q && export NORMALVOL=%s && export SPEAKVOL=%s && export TTS_LOCALE=%s && export LANGUAGE=%s && export AMAZON=%s && export ALEXA=%s && export USE_ANNOUNCEMENT_FOR_SPEAK=%s && export TMP=%q && %s/" .. SCRIPT_NAME .. " "
-	local username = getVar(MYSID, "Username", "", masterID)
-	local password = getVar(MYSID, "Password", "", masterID) .. getVar(MYSID, "OneTimePassCode", "", masterID)
-	local defaultVolume = getVarNumeric(MYSID, "DefaultVolume", 0, masterID)
-	local announcementVolume = getVarNumeric(MYSID, "AnnouncementVolume", 0, masterID)
-	local defaultDevice = getVar(MYSID, "DefaultEcho", "", masterID)
-	local alexaHost = getVar(MYSID, "AlexaHost", "", masterID)
-	local amazonHost = getVar(MYSID, "AmazonHost", "", masterID)
-	local language = getVar(MYSID, "Language", "", masterID)
-	local useAnnoucements = getVarNumeric(MYSID, "UseAnnoucements", 0, masterID)
+	local username = getVar(MYSID, "Username", "", devNum)
+	local password = getVar(MYSID, "Password", "", devNum) .. getVar(MYSID, "OneTimePassCode", "", devNum)
+	local defaultVolume = getVarNumeric(MYSID, "DefaultVolume", 0, devNum)
+	local announcementVolume = getVarNumeric(MYSID, "AnnouncementVolume", 0, devNum)
+	local defaultDevice = getVar(MYSID, "DefaultEcho", "", devNum)
+	local alexaHost = getVar(MYSID, "AlexaHost", "", devNum)
+	local amazonHost = getVar(MYSID, "AmazonHost", "", devNum)
+	local language = getVar(MYSID, "Language", "", devNum)
+	local useAnnoucements = getVarNumeric(MYSID, "UseAnnoucements", 0, devNum)
 
 	local command = string.format(args, username, password,
 										(defaultVolume or announcementVolume),
@@ -295,84 +297,84 @@ local function buildCommand(settings)
 										BIN_PATH, BIN_PATH,
 										(settings.Text or "Test"),
 										(settings.GroupZones or settings.GroupDevices or defaultDevice))
-
+	D(devNum, command)
 	-- reset onetimepass
-	setVar(MYSID, "OneTimePassCode", "", masterID)
+	setVar(MYSID, "OneTimePassCode", "", devNum)
 	return command
 end
 
-function sayTTS(device, settings)
-	local defaultDevice = getVar(MYSID, "DefaultEcho", "", masterID)
+function sayTTS(devNum, settings)
+	local defaultDevice = getVar(MYSID, "DefaultEcho", "", devNum)
 	local text = (settings.Text or "Test")
 
 	local args = string.format(COMMANDS_SPEAK,
 									text,
 									(settings.GroupZones or settings.GroupDevices or defaultDevice))
 
-	local command = buildCommand(settings) .. args
+	local command = buildCommand(devNum, settings) .. args
 					
-	D("Executing command [TTS]: %1", args)
-	executeCommand(command)
+	D(devNum, "Executing command [TTS]: %1", args)
+	executeCommand(devNum, command)
 
 	-- wait for the next one in queue
-	local defaultBreak = getVar(MYSID, "DefaultBreak", 3, masterID)
-	local useAnnoucements = getVarNumeric(MYSID, "UseAnnoucements", 0, masterID)
+	local defaultBreak = getVar(MYSID, "DefaultBreak", 3, devNum)
+	local useAnnoucements = getVarNumeric(MYSID, "UseAnnoucements", 0, devNum)
 	local timeout = defaultBreak -- in seconds
 
 	if useAnnoucements == 0 then
 		-- wait for x seconds based on string length
-		local timeout =  0.062 * string.len(text) + 1
+		timeout =  0.062 * string.len(text) + 1
 	end
 
-	luup.call_delay("checkQueue", timeout, device)
-	D("Queue will be checked again in %1 secs", timeout)
+	luup.call_delay("checkQueue", timeout, devNum)
+	D(devNum, "Queue will be checked again in %1 secs", timeout)
 end
 
-function runRoutine(device, settings)
-	local defaultDevice = getVar(MYSID, "DefaultEcho", "", masterID)
+function runRoutine(devNum, settings)
+	local defaultDevice = getVar(MYSID, "DefaultEcho", "", devNum)
 
 	local args = string.format(COMMANDS_ROUTINE,
 									settings.RoutineName,
 									(settings.GroupZones or settings.GroupDevices or defaultDevice))
-	local command = buildCommand(settings) .. args
+	local command = buildCommand(devNum, settings) .. args
 
-	D("Executing command [runRoutine]: %1", args)
-	executeCommand(command)
+	D(devNum, "Executing command [runRoutine]: %1", args)
+	executeCommand(devNum, command)
 end
 
-function runCommand(device, settings)
-	local command = buildCommand(settings) ..
+function runCommand(devNum, settings)
+	local command = buildCommand(devNum, settings) ..
 					settings.Command
 
-	D("Executing command [runCommand]: %1", settings.Command)
-	executeCommand(command)
+	D(devNum, "Executing command [runCommand]: %1", settings.Command)
+	executeCommand(devNum, command)
 end
 
-function setVolume(volume, device, settings)
-	local defaultVolume = getVarNumeric(MYSID, "DefaultVolume", 0, masterID)
-	local defaultDevice = getVar(MYSID, "DefaultEcho", "", masterID)
+function setVolume(volume, devNum, settings)
+	local defaultVolume = getVarNumeric(MYSID, "DefaultVolume", 0, devNum)
+	local defaultDevice = getVar(MYSID, "DefaultEcho", "", devNum)
 	local echoDevice = (settings.GroupZones or settings.GroupDevices or defaultDevice)
 
 	local finalVolume = settings.DesiredVolume or 0
-	D("Volume requested for %2: %1", finalVolume, echoDevice)
+	D(devNum, "Volume requested for %2: %1", finalVolume, echoDevice)
 
 	if settings.DesiredVolume == nil and volume ~= 0 then
 		-- alexa doesn't support +1/-1, so we must first get current volume
-		local command = buildCommand(settings) ..
+		local command = buildCommand(devNum, settings) ..
 								string.format(COMMANDS_GETVOLUME, echoDevice)
-		local response = executeCommand(command)
+		local response = executeCommand(devNum, command)
 		response = string.gsub(response, '"','')
 		local currentVolume = tonumber(response or defaultVolume)
 
-		D("Volume for %2: %1", currentVolume, echoDevice)
+		D(devNum, "Volume for %2: %1", currentVolume, echoDevice)
 		finalVolume = currentVolume + (volume * 10)
 	end
 
-	D("Volume for %2 set to: %1", finalVolume, echoDevice)
-	local command = buildCommand(settings) ..
+	D(devNum, "Volume for %2 set to: %1", finalVolume, echoDevice)
+	local command = buildCommand(devNum, settings) ..
 						string.format(COMMANDS_SETVOLUME, finalVolume, echoDevice)
 
-	executeCommand(command)
+	executeCommand(devNum, command)
 end
 
 function isFile(name)
@@ -380,7 +382,7 @@ function isFile(name)
 	return os.rename(name,name) and true or false
 end
 
-function setupScripts()
+function setupScripts(devNum)
 	D("Setup in progress")
 	-- mkdir
 	lfs.mkdir(BIN_PATH)
@@ -400,7 +402,7 @@ function setupScripts()
 	end
 
 	-- first command must be executed to create cookie and setup the environment
-	executeCommand(buildCommand({}))
+	executeCommand(devNum, buildCommand(devNum, {}))
 
 	D("Setup completed")
 end
@@ -411,9 +413,7 @@ function reset()
 end
 
 function startPlugin(devNum)
-	masterID = devNum
-
-	L("Plugin starting")
+	L(devNum, "Plugin starting")
 	
 	-- detect OpenLuup
 	for k,v in pairs(luup.devices) do
@@ -423,83 +423,85 @@ function startPlugin(devNum)
 		end
 	end
 
-	D("OpenLuup: %1", openLuup)
+	D(devNum, "OpenLuup: %1", openLuup)
 
 	-- jq installed?
 	if isFile("/usr/bin/jq") then
 		SCRIPT_NAME = SCRIPT_NAME_ADV
 
-		deviceMessage(masterID, "Clearing...", false, 5)
+		deviceMessage(devNum, "Clearing...", false, 5)
 
-		D("jq: true")
+		D(devNum, "jq: true")
 	else
 		-- notify the user to install jq
 		local currentVer = tonumber(luup.short_version or "1")
 
 		if openLuup or currentVer >= 7.32 then
-			deviceMessage(masterID, 'Please install jq package.', true, 0)
+			deviceMessage(devNum, 'Please install jq package.', true, 0)
 		end
 
-		D("jq: false")
+		D(devNum, "jq: false")
 	end
 
 	-- init default vars
-	initVar(MYSID, "DebugMode", 0, masterID)
-	initVar(MYSID, "Username", "youraccount@amazon.com", masterID)
-	initVar(MYSID, "Password", "password", masterID)
-	initVar(MYSID, "DefaultEcho", "Bedroom", masterID)
-	initVar(MYSID, "DefaultVolume", 50, masterID)
+	initVar(MYSID, "DebugMode", 0, devNum)
+	BIN_PATH = initVar(MYSID, "BinPath", BIN_PATH, devNum)
+	initVar(MYSID, "Username", "youraccount@amazon.com", devNum)
+	initVar(MYSID, "Password", "password", devNum)
+	initVar(MYSID, "DefaultEcho", "Bedroom", devNum)
+	initVar(MYSID, "DefaultVolume", 50, devNum)
 
 	-- migration
-	if initVar(MYSID, "AnnouncementVolume", "0", masterID) == "0" then
-		local volume = getVarNumeric(MYSID, "DefaultVolume", 0, masterID)
-		setVar(HASID, "AnnouncementVolume", volume, masterID)
+	if initVar(MYSID, "AnnouncementVolume", "0", devNum) == "0" then
+		local volume = getVarNumeric(MYSID, "DefaultVolume", 0, devNum)
+		setVar(MYSID, "AnnouncementVolume", volume, devNum)
+		setVar(HASID, "AnnouncementVolume", nil, devNum) -- bug fixing
 	end
 
 	-- init default values for US
-	initVar(MYSID, "Language", "en-us", masterID)
-	initVar(MYSID, "AlexaHost", "pitangui.amazon.com", masterID)
-	initVar(MYSID, "AmazonHost", "amazon.com", masterID)
+	initVar(MYSID, "Language", "en-us", devNum)
+	initVar(MYSID, "AlexaHost", "pitangui.amazon.com", devNum)
+	initVar(MYSID, "AmazonHost", "amazon.com", devNum)
 
 	-- annoucements
-	initVar(MYSID, "UseAnnoucements", "0", masterID)
-	initVar(MYSID, "DefaultBreak", 3, masterID)
+	initVar(MYSID, "UseAnnoucements", "0", devNum)
+	initVar(MYSID, "DefaultBreak", 3, devNum)
 
 	-- OTP
-	initVar(MYSID, "OneTimePassCode", "", masterID)
+	initVar(MYSID, "OneTimePassCode", "", devNum)
 
 	-- categories
-	if luup.attr_get("category_num", masterID) == nil then
-		luup.attr_set("category_num", "15", masterID)			-- A/V
+	if luup.attr_get("category_num", devNum) == nil then
+		luup.attr_set("category_num", "15", devNum)			-- A/V
 	end
 
 	-- generic
-	initVar(HASID, "CommFailure", 0, masterID)
+	initVar(HASID, "CommFailure", 0, devNum)
 
 	-- currentversion
-	local vers = initVar(MYSID, "CurrentVersion", "0", masterID)
+	local vers = initVar(MYSID, "CurrentVersion", "0", devNum)
 	if vers ~= _PLUGIN_VERSION then
 		-- new version, let's reload the script again
-		L("New version detected: reconfiguration in progress")
-		setVar(HASID, "Configured", 0, masterID)
-		setVar(MYSID, "CurrentVersion", _PLUGIN_VERSION, masterID)
+		L(devNum, "New version detected: reconfiguration in progress")
+		setVar(HASID, "Configured", 0, devNum)
+		setVar(MYSID, "CurrentVersion", _PLUGIN_VERSION, devNum)
 	end
 	
 	-- check for configured flag and for the script
-	local configured = getVarNumeric(HASID, "Configured", 0, masterID)
+	local configured = getVarNumeric(HASID, "Configured", 0, devNum)
 	if configured == 0 or not isFile(BIN_PATH .. "/" .. SCRIPT_NAME) then
-		setupScripts()
+		setupScripts(devNum)
 		setVar(HASID, "Configured", 1, devNum)
 	else
-		D("Engine correctly configured: skipping config")
+		D(devNum, "Engine correctly configured: skipping config")
 	end
 
 	-- randomizer
 	math.randomseed(tonumber(tostring(os.time()):reverse():sub(1,6)))
 
-	checkQueue(masterID)
+	checkQueue(devNum)
 
 	-- status
-	luup.set_failure(0, masterID)
+	luup.set_failure(0, devNum)
 	return true, "Ready", _PLUGIN_NAME
 end
