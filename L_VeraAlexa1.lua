@@ -1,3 +1,9 @@
+------------------------------------------------------------------------
+-- Copyright (c) 2020-2021 Daniele Bochicchio
+-- License: MIT License
+-- Source Code: https://github.com/dbochicchio/VeraAlexa
+------------------------------------------------------------------------
+
 module("L_VeraAlexa1", package.seeall)
 
 local _PLUGIN_NAME = "VeraAlexa"

@@ -177,8 +177,8 @@ The device is working and supported under OpenLuup and AltUI.
 In this case, if you're using an old version of AltUI/OpenLoop, just be sure the get the base service file from Vera (automatically done if you have the Vera Bridge installed).
 
 # Problems with cookie?
-Sometimes cookie will not get generated. Here's the steps to get it manually:
-https://community.getvera.com/t/alexa-tts-text-to-speech-and-more-plug-in-for-vera/211033/156
+Sometimes cookie will not get generated. 
+[See the steps to get it manually](https://community.getvera.com/t/alexa-tts-text-to-speech-and-more-plug-in-for-vera/211033/156).
 
 # One Time Passcode
 Thanks to @E1cid, One Time Passcode are now supported. This makes easy to renew a cookie when dealing with 2-factory authentication (2FA).
@@ -187,5 +187,9 @@ Amazon will send you a One Time Passcode via e-mail or SMS. You can use tasker/a
 http://*veraIP*:3480/data_request?id=variableset&DeviceNum=666&serviceId=urn:bochicchio-com:serviceId:VeraAlexa1&Variable=OneTimePassCode&Value=*OTPVALUE*
 
 # Support
-If you need more help, please post on Vera's forum and tag me (@therealdb).
-https://community.getvera.com/t/alexa-tts-text-to-speech-and-more-plug-in-for-vera/211033/
+Before asking for support, please:
+ - change *DebugMode* variable to 1 (on the device itself, not on the master)
+ - repeat your problem and capture logs
+ - logs could be captured via SSH or by navigating to `http://VeraIP/cgi-bin/cmh/log.sh?Device=LuaUPnP`. [More Info](http://wiki.micasaverde.com/index.php/Logs)
+
+If you need help, visit [SmartHome.Community](https://smarthome.community/) and tag me (therealdb).
