@@ -75,7 +75,7 @@
 			<serviceId>urn:bochicchio-com:serviceId:VeraAlexa1</serviceId>
 			<name>Reset</name>
 			<run>
-				VeraAlexa1.reset()
+				VeraAlexa1.reset(lul_device)
 			</run>
 		</action>
 

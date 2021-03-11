@@ -7,7 +7,7 @@
 module("L_VeraAlexa1", package.seeall)
 
 local _PLUGIN_NAME = "VeraAlexa"
-local _PLUGIN_VERSION = "0.91"
+local _PLUGIN_VERSION = "0.92"
 
 local debugMode = false
 local openLuup = false
@@ -414,9 +414,9 @@ function setupScripts(devNum)
 	D("Setup completed")
 end
 
-function reset()
+function reset(devNum)
 	os.execute("rm -r " .. BIN_PATH .. "/*")
-	setupScripts()
+	setupScripts(devNum)
 end
 
 function startPlugin(devNum)

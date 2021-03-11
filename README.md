@@ -80,7 +80,7 @@ luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1", "Reset", {}, 666)
 This will reset cookie and device list, and will download the bash script again.
 
 # jq package
-Wnen *jq* package is installed, the plug-in will automatically switch to the avanced version.
+When *jq* package is installed, the plug-in will automatically switch to the avanced version.
 jq can be installed on Vera via a special dev repo and should be coming with fw 7.32. On OpenLuup you can add jq via your package manager.
 
 # Use in code: Routines (requires jq)
