@@ -390,7 +390,7 @@ function isFile(name)
 end
 
 function setupScripts(devNum)
-	D("Setup in progress")
+	D(devNum, "Setup in progress")
 	-- mkdir
 	lfs.mkdir(BIN_PATH)
 
@@ -411,7 +411,7 @@ function setupScripts(devNum)
 	-- first command must be executed to create cookie and setup the environment
 	executeCommand(devNum, buildCommand(devNum, {}))
 
-	D("Setup completed")
+	D(devNum, "Setup completed")
 end
 
 function reset(devNum)
