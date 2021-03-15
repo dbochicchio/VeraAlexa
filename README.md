@@ -11,10 +11,11 @@ All the devices are implemented as standard Vera device types.
 **This is beta software!**
 
 If you find problem with the sh script, please refer to its author.
-Due to Vera's OS limited capabilities, only accounts with MFA disabled are supported at the moment.
+Due to Vera's OS limited capabilities, only accounts with MFA (Multi Factor Authentication) disabled are supported at the moment.
+MFA accounts are OK on openLuup.
 
 # Installation
-To install, simply upload the files in this directory (except readme) using Vera's feature (Go to *Apps*, then *Develop Apps*, then *Luup files* and select *Upload*) and then create a new device under Vera.
+To install, simply upload the files in the package using Vera's feature (Go to *Apps*, then *Develop Apps*, then *Luup files* and select *Upload*) and then create a new device under Vera.
 
 To create a new device, got to *Apps*, then *Develop Apps*, then *Create device*.
 
@@ -81,10 +82,13 @@ This will reset cookie and device list, and will download the bash script again.
 
 # jq package
 When *jq* package is installed, the plug-in will automatically switch to the avanced version.
-jq can be installed on Vera via a special dev repo and should be coming with fw 7.32. On OpenLuup you can add jq via your package manager.
+*jq* can be installed on Vera starting with firmware 7.32 (now in beta).
+
+On OpenLuup you can add *jq* via your OS package manager.
+[OAthTool](https://www.nongnu.org/oath-toolkit/man-oathtool.html) is supported too.
 
 # Use in code: Routines (requires jq)
-Routines are only supported with jq:
+Routines are only supported with *jq*:
 
 ```
 luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1", 
@@ -93,7 +97,7 @@ luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1",
 ```
 
 # Use in code: Generic commands (requires jq)
-Commands are only supported with jq:
+Commands are only supported with *jq*:
 
 ```
 luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1", 
@@ -110,13 +114,24 @@ As per Amazon docs, Alexa excludes that device from announcement delivery if:
 - The device is actively in a call or drop-in.
 - The device is in Do Not Disturb mode.
 
-*Manage Announcements in the Alexa mobile app. Go to*   **Settings > Device Settings >**   ***device_name***   **>Communications > Announcements**   *to configure settings for each Alexa device in your household.*
+*Manage Announcements in the Alexa mobile app. Go to* **Settings > Device Settings >**   ***device_name***   **>Communications > Announcements**   *to configure settings for each Alexa device in your household.*
 
 Announcements are opt-in and could be configured with these variables:
 - *UseAnnoucements*: set to 1 to enable, 0 to disable
 - *DefaultBreak*: default to 3 secs - it's the time between repeated announcements
-- *AnnouncmentVolume*: the volume used to play the announcment, if an explicit volume is not specified
+- *AnnouncmentVolume*: the volume used to play the announcements, if an explicit volume is not specified
 - *DefaultVolume*: the default volume to be restored after an announcment is played, if the current volume cannot be determined
+
+# Spoken commands as text
+
+You can execute any spoken command (ie: to engage Alexa Guard, or a complex command) using this code:
+
+```
+-- execute a spoken command on Bedroom device
+luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1",
+   "RunCommand",
+   {Command="-e textcommand:'Alexa, I’m leaving' -d 'Bedroom'"}, 666)
+```
 
 # More code examples
 ```
@@ -129,11 +144,6 @@ luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1",
 luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1",
    "RunCommand",
    {Command="-e weather -d 'Bedroom'"}, 666)
-
--- execute a spoken command on Bedroom device
-luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1",
-   "RunCommand",
-   {Command="-e textcommand:'Alexa, I’m leaving' -d 'Bedroom'"}, 666)
 
 -- sounds - see https://developer.amazon.com/en-US/docs/alexa/custom-skills/ask-soundlibrary.html
 luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1",
