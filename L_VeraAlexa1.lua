@@ -1,5 +1,5 @@
 ------------------------------------------------------------------------
--- Copyright (c) 2020-2021 Daniele Bochicchio
+-- Copyright (c) 2018-2021 Daniele Bochicchio
 -- License: MIT License
 -- Source Code: https://github.com/dbochicchio/VeraAlexa
 ------------------------------------------------------------------------
@@ -7,8 +7,9 @@
 module("L_VeraAlexa1", package.seeall)
 
 local _PLUGIN_NAME = "VeraAlexa"
-local _PLUGIN_VERSION = "0.92"
+local _PLUGIN_VERSION = "0.94"
 
+local devMode = false
 local debugMode = false
 local openLuup = false
 
@@ -170,7 +171,7 @@ function deviceMessage(devNum, message, error, timeout)
 	local status = error and 2 or 4
 	timeout = timeout or 15
 	D(devNum, "deviceMessage(%1,%2,%3,%4)", devNum, message, error, timeout)
-	luup.device_message(devID, status, message, timeout, _PLUGIN_NAME)
+	luup.device_message(devNum, status, message, timeout, _PLUGIN_NAME)
 end
 
 function os.capture(cmd, raw)
@@ -303,7 +304,10 @@ local function buildCommand(devNum, settings)
 										BIN_PATH, BIN_PATH,
 										(settings.Text or "Test"),
 										(settings.GroupZones or settings.GroupDevices or defaultDevice))
-	--D(devNum, command)
+	
+	if devMode then
+		D(devNum, command)
+	end
 
 	-- reset onetimepass
 	setVar(MYSID, "OneTimePassCode", "", devNum)
@@ -395,17 +399,18 @@ function setupScripts(devNum)
 	lfs.mkdir(BIN_PATH)
 
 	-- download script from github
-	os.execute("curl https://raw.githubusercontent.com/thorsten-gehrig/alexa-remote-control/master/" .. SCRIPT_NAME .. " > " .. BIN_PATH .. "/" .. SCRIPT_NAME)
+	executeCommand(devNum, "curl https://raw.githubusercontent.com/thorsten-gehrig/alexa-remote-control/master/" .. SCRIPT_NAME .. " > " .. BIN_PATH .. "/" .. SCRIPT_NAME)
 
 	-- add permission using lfs
-	os.execute("chmod 777 " .. BIN_PATH .. "/" .. SCRIPT_NAME)
+	executeCommand(devNum, "chmod 777 " .. BIN_PATH .. "/" .. SCRIPT_NAME)
 	-- TODO: fix this and use lfs
 	-- lfs.attributes(BIN_PATH .. "/alexa_remote_control.sh", {permissions = "777"})
 
 	-- install jq
 	local currentVer = tonumber(luup.short_version or "1")
 	if not openLuup and currentVer >= 7.32 then
-		os.execute("opkg --force-depends install jq")
+		executeCommand(devNum, "opkg update")
+		executeCommand(devNum, "opkg --force-depends install jq")
 	end
 
 	-- first command must be executed to create cookie and setup the environment
@@ -434,20 +439,26 @@ function startPlugin(devNum)
 
 	-- jq installed?
 	if isFile("/usr/bin/jq") then
+		D(devNum, "jq: true")
 		SCRIPT_NAME = SCRIPT_NAME_ADV
 
 		deviceMessage(devNum, "Clearing...", false, 5)
-
-		D(devNum, "jq: true")
 	else
+		D(devNum, "jq: false")
+
 		-- notify the user to install jq
 		local currentVer = tonumber(luup.short_version or "1")
 
-		if openLuup or currentVer >= 7.32 then
+		-- ask to install jq con openLuup
+		if openLuup then
 			deviceMessage(devNum, 'Please install jq package.', true, 0)
 		end
 
-		D(devNum, "jq: false")
+		-- try to install on VeraOS 7.32+
+		if currentVer >= 7.32 then
+			setVar(HASID, "Configured", 0, devNum)
+			D(devNum, "jq: false - forced install")
+		end
 	end
 
 	-- init default vars

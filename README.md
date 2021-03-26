@@ -19,9 +19,9 @@ To install, simply upload the files in the package using Vera's feature (Go to *
 
 To create a new device, got to *Apps*, then *Develop Apps*, then *Create device*.
 
-- Upnp Device Filename/Device File: *D_VeraAlexa1.xml*
-- Upnp Implementation Filename/Implementation file: *I_VeraAlexa1.xml*
-- Parent Device: none
+- **Upnp Device Filename/Device File**: *D_VeraAlexa1.xml*
+- **Upnp Implementation Filename/Implementation file**: *I_VeraAlexa1.xml*
+- **Parent Device**: none
 
 # Configuration
 After installation, ensure to change mandatory variables under your Device, then *Advanced*, then *Variables*.
