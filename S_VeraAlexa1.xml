@@ -147,13 +147,9 @@
 		</action>
 		<action>
 			<name>Reset</name>
-			<argumentList>
-				<argument>
-					<name>GroupZones</name>
-					<direction>in</direction>
-					<relatedStateVariable>A_ARG_TYPE_Device</relatedStateVariable>
-				</argument>
-			</argumentList>
+		</action>
+		<action>
+			<name>UpdateDevices</name>
 		</action>
 	</actionList>
 </scpd>

@@ -10,7 +10,7 @@
 		<Category_Num>15</Category_Num>
 		<friendlyName>Alexa</friendlyName>
 		<manufacturer>Amazon</manufacturer>
-		<manufacturerURL>https://github.com/dbochicchio/vera/VeraAlexa</manufacturerURL>
+		<manufacturerURL>https://github.com/dbochicchio/VeraAlexa</manufacturerURL>
 		<modelDescription>Alexa plug-in</modelDescription>
 		<modelName>Amazon</modelName>
 		<modelNumber>1.0</modelNumber>

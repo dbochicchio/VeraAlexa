@@ -7,36 +7,28 @@
 module("L_VeraAlexa1", package.seeall)
 
 local _PLUGIN_NAME = "VeraAlexa"
-local _PLUGIN_VERSION = "0.94"
+local _PLUGIN_VERSION = "0.95"
 
 local devMode = false
 local debugMode = false
 local openLuup = false
-
-local taskHandle = -1
-local TASK_ERROR = 2
-local TASK_ERROR_PERM = -2
-local TASK_SUCCESS = 4
-local TASK_BUSY = 1
 
 -- SIDs
 local MYSID									= "urn:bochicchio-com:serviceId:VeraAlexa1"
 local HASID									= "urn:micasaverde-com:serviceId:HaDevice1"
 
 -- COMMANDS
-local COMMANDS_SPEAK						= "-e speak:'%s' -d %q"
-local COMMANDS_ROUTINE						= "-e automation:\"%s\" -d %q"
+local COMMANDS_SPEAK						= "-e speak:%q -d %q"
+local COMMANDS_ROUTINE						= "-e automation:%q -d %q"
 local COMMANDS_SETVOLUME					= "-e vol:%s -d %q"
 local COMMANDS_GETVOLUME					= "-q -d %q | sed ':a;N;$!ba;s/\\n/ /g' | grep 'volume' | sed -r 's/^.*\"volume\":\\s*([0-9]+)[^0-9]*$/\\1/g'"
 local BIN_PATH								= "/storage/alexa"
 local SCRIPT_NAME							= "alexa_remote_control_plain.sh"
 local SCRIPT_NAME_ADV						= "alexa_remote_control.sh"
 
-TASK_HANDLE = nil
-
 -- libs
 local lfs = require("lfs")
-local json = require("dkjson")	
+local json = require("dkjson")
 
 --- ***** GENERIC FUNCTIONS *****
 local function dump(t, seen)
@@ -93,7 +85,7 @@ local function L(devNum, msg, ...) -- luacheck: ignore 212
 	else
 		str = string.format("%s:%s", str, msg)
 	end
-	
+
 	str = string.gsub(str, "%%(%d+)", function(n)
 		n = tonumber(n, 10)
 		if n < 1 or n > #arg then return "nil" end
@@ -177,22 +169,22 @@ end
 function os.capture(cmd, raw)
 	local handle = assert(io.popen(cmd, 'r'))
 	local output = assert(handle:read('*a'))
-	
+
 	handle:close()
-	
-	if raw then 
-		return output 
+
+	if raw then
+		return output
 	end
-   
+
 	output = string.gsub(
 		string.gsub(
 			string.gsub(output, '^%s+', ''), 
-			'%s+$', 
+			'%s+$',
 			''
-		), 
+		),
 		'[\n\r]+',
 		' ')
-   
+
    return output
 end
 
@@ -205,7 +197,7 @@ function checkQueue(devNum)
 	if ttsQueue[devNum] == nil then ttsQueue[devNum] = {} end
 
 	D(devNum, "checkQueue: %1 in queue", #ttsQueue[devNum])
-	
+
 	-- is queue now empty?
 	if #ttsQueue[devNum] == 0 then
 		D(devNum, "checkQueue: queue is empty")
@@ -216,7 +208,7 @@ function checkQueue(devNum)
 
 	-- get the next one
 	sayTTS(devNum, ttsQueue[devNum][1])
-	
+
 	-- remove from queue
 	table.remove(ttsQueue[devNum], 1)
 end
@@ -239,13 +231,13 @@ function addToQueue(devNum, settings)
 		-- no need to repeat, just concatenate
 		local text = ""
 		for f = 1, howMany do
-			text = text .. "<s>" .. settings.Text .. '</s><break time="' .. (f == howMany and 0 or defaultBreak) .. 's" />'
+			text = text .. "<s>" .. settings.Text .. '</s>' .. (f == howMany and "" or '<break time="' .. defaultBreak .. 's" />')
 		end
 		settings.Text = text
 
 		table.insert(ttsQueue[devNum], settings)
 	else
-		for f = 1, howMany do
+		for _ = 1, howMany do
 			table.insert(ttsQueue[devNum], settings)
 		end
 	end
@@ -257,18 +249,53 @@ function addToQueue(devNum, settings)
 	end
 end
 
+local function updateDevicesInternal(devNum)
+	local function readFile(path)
+		local file = io.open(path, "rb") -- r read mode and b binary mode
+		if not file then return nil end
+		local content = file:read "*a" -- *a or *all reads the whole file
+		file:close()
+		return content
+	end
+	local content = readFile(BIN_PATH .. '/.alexa.devicelist.json')
+
+	local _ ,json = pcall(require, "dkjson")
+
+	-- check for dependencies
+	if not json or type(json) ~= "table" then
+		L('Failure: dkjson library not found')
+		luup.set_failure( 1, devNum)
+		return
+	end
+
+	local jsonResponse, _, err = json.decode(content)
+	if jsonResponse == nil then return end
+
+	local formattedValue = ''
+	local devices = jsonResponse.devices
+	for _, device in ipairs(devices) do
+		formattedValue = formattedValue .. device.accountName .. ', ' .. tostring(device.online) .. ',' .. tostring(device.serialNumber) .. ',' .. device.deviceFamily ..'\n'
+	end
+
+	setVar(MYSID, "Devices", formattedValue, devNum)
+end
+
 local function safeCall(devNum, call)
 	local function err(x)
 		local s = string.dump(call)
-		D(devNum, 'Error: %s - %s', x, s)
+		D(devNum, '[Error] %1 - %2', x, s)
 	end
 
-	local s, r, e = xpcall(call, err)
+	local _, r, _ = xpcall(call, err)
 	return r
 end
 
 local function executeCommand(devNum, command)
 	return safeCall(devNum, function()
+		if devMode then
+			D(devNum, "executeCommand: %1", command)
+		end
+
 		local response = os.capture(command)
 
 		-- set failure
@@ -279,14 +306,17 @@ local function executeCommand(devNum, command)
 		setVar(MYSID, "LatestResponse", response, devNum)
 		D(devNum, "Response from Alexa.sh: %1", response)
 
+		updateDevicesInternal(devNum)
+
 		return response
 	end)
 end
 
 local function buildCommand(devNum, settings)
-	local args = "export EMAIL=%q && export PASSWORD=%q && export NORMALVOL=%s && export SPEAKVOL=%s && export TTS_LOCALE=%s && export LANGUAGE=%s && export AMAZON=%s && export ALEXA=%s && export USE_ANNOUNCEMENT_FOR_SPEAK=%s && export TMP=%q && %s/" .. SCRIPT_NAME .. " "
+	local args = "export EMAIL=%q && export PASSWORD=%q && export MFASECRET=%q && export NORMALVOL=%s && export SPEAKVOL=%s && export TTS_LOCALE=%s && export LANGUAGE=%s && export AMAZON=%s && export ALEXA=%s && export USE_ANNOUNCEMENT_FOR_SPEAK=%s && export TMP=%q && %s/" .. SCRIPT_NAME .. " "
 	local username = getVar(MYSID, "Username", "", devNum)
 	local password = getVar(MYSID, "Password", "", devNum) .. getVar(MYSID, "OneTimePassCode", "", devNum)
+	local mfaSecret = getVar(MYSID, "MFASecret", "", devNum)
 	local defaultVolume = getVarNumeric(MYSID, "DefaultVolume", 0, devNum)
 	local announcementVolume = getVarNumeric(MYSID, "AnnouncementVolume", 0, devNum)
 	local defaultDevice = getVar(MYSID, "DefaultEcho", "", devNum)
@@ -295,7 +325,7 @@ local function buildCommand(devNum, settings)
 	local language = getVar(MYSID, "Language", "", devNum)
 	local useAnnoucements = getVarNumeric(MYSID, "UseAnnoucements", 0, devNum)
 
-	local command = string.format(args, username, password,
+	local command = string.format(args, username, password, mfaSecret,
 										(defaultVolume or announcementVolume),
 										(settings.Volume or announcementVolume),
 										(settings.Language or language), (settings.Language or language),
@@ -304,10 +334,6 @@ local function buildCommand(devNum, settings)
 										BIN_PATH, BIN_PATH,
 										(settings.Text or "Test"),
 										(settings.GroupZones or settings.GroupDevices or defaultDevice))
-	
-	if devMode then
-		D(devNum, command)
-	end
 
 	-- reset onetimepass
 	setVar(MYSID, "OneTimePassCode", "", devNum)
@@ -323,7 +349,7 @@ function sayTTS(devNum, settings)
 									(settings.GroupZones or settings.GroupDevices or defaultDevice))
 
 	local command = buildCommand(devNum, settings) .. args
-					
+
 	D(devNum, "Executing command [TTS]: %1", args)
 	executeCommand(devNum, command)
 
@@ -419,6 +445,11 @@ function setupScripts(devNum)
 	D(devNum, "Setup completed")
 end
 
+function updateDevices(devNum)
+	D(devNum, 'updateDevices: %1', devNum)
+	executeCommand(devNum, buildCommand(devNum, {}) .. '-a')
+end
+
 function reset(devNum)
 	os.execute("rm -r " .. BIN_PATH .. "/*")
 	setupScripts(devNum)
@@ -426,9 +457,9 @@ end
 
 function startPlugin(devNum)
 	L(devNum, "Plugin starting")
-	
+
 	-- detect OpenLuup
-	for k,v in pairs(luup.devices) do
+	for _, v in pairs(luup.devices) do
 		if v.device_type == "openLuup" then
 			openLuup = true
 			BIN_PATH = "/etc/cmh-ludl/VeraAlexa"
@@ -466,6 +497,7 @@ function startPlugin(devNum)
 	BIN_PATH = initVar(MYSID, "BinPath", BIN_PATH, devNum)
 	initVar(MYSID, "Username", "youraccount@amazon.com", devNum)
 	initVar(MYSID, "Password", "password", devNum)
+	initVar(MYSID, "MFASecret", "", devNum)
 	initVar(MYSID, "DefaultEcho", "Bedroom", devNum)
 	initVar(MYSID, "DefaultVolume", 50, devNum)
 
@@ -504,7 +536,7 @@ function startPlugin(devNum)
 		setVar(HASID, "Configured", 0, devNum)
 		setVar(MYSID, "CurrentVersion", _PLUGIN_VERSION, devNum)
 	end
-	
+
 	-- check for configured flag and for the script
 	local configured = getVarNumeric(HASID, "Configured", 0, devNum)
 	if configured == 0 or not isFile(BIN_PATH .. "/" .. SCRIPT_NAME) then

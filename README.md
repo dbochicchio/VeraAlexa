@@ -1,8 +1,9 @@
 ﻿# Alexa plug-in for Vera
 This plug-in uses [Alexa remote control shell script](https://raw.githubusercontent.com/thorsten-gehrig/alexa-remote-control/master/alexa_remote_control.sh) to execute TTS (Text-To-Speech) commands against your Amazon Echo. [More info here](https://github.com/thorsten-gehrig/alexa-remote-control/).
 
-On Vera only TTS is implemented.
-OpenLuup supports routines, announcements and advanced commands. Please install *jq* package before proceding.
+On Vera before version 7.31 only TTS is implemented.
+
+OpenLuup and VeraOS 7.32+ support routines, announcements and advanced commands. Please install *jq* package before proceding.
 This is a work in progress.
 
 Tested with success with Vera Firmware 7.30+. YMMV.
@@ -25,7 +26,7 @@ To create a new device, got to *Apps*, then *Develop Apps*, then *Create device*
 
 # Configuration
 After installation, ensure to change mandatory variables under your Device, then *Advanced*, then *Variables*.
-Please adjust Username, Password, DefaultEcho, DefaultVolume, AnnouncmentVolume, Language and AlexaHost/AmazonHost to your settings.
+Please adjust Username, Password, MFASecret, DefaultEcho, DefaultVolume, AnnouncmentVolume, Language and AlexaHost/AmazonHost to your settings.
 Youn can find more information about the supported values in the original bash script.
 
 # Use in code: TTS
@@ -71,7 +72,20 @@ luup.call_action("urn:micasaverde-com:serviceId:Sonos1",
 - (Deprecated) *urn:dlna-org:serviceId:DLNAMediaController1*: *Down*/*Up*/*Mute*
 - (Deprecated) *urn:dlna-org:serviceId:DLNAMediaController1*: *SetVolume* (with parameter *DesiredVolume* and *GroupZones*)
 
-# Use in code: Reset
+# Actions: UpdateDevices
+If you want to upload the local device list, just use this code:
+
+```
+luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1", "UpdateDevices", {}, 666)
+```
+
+Look for variable *Devices* for a comma separted list of these values (one device per line):
+
+```
+DeviceName, OnlineStatus, Serial, DeviceFamily
+```
+
+# Actions: Reset
 If you need to force a reset, just use this code:
 
 ```
@@ -198,7 +212,7 @@ http://*veraIP*:3480/data_request?id=variableset&DeviceNum=666&serviceId=urn:boc
 
 # Support
 Before asking for support, please:
- - change *DebugMode* variable to 1 (on the device itself, not on the master)
+ - change *DebugMode* variable to 1
  - repeat your problem and capture logs
  - logs could be captured via SSH or by navigating to `http://VeraIP/cgi-bin/cmh/log.sh?Device=LuaUPnP`. [More Info](http://wiki.micasaverde.com/index.php/Logs)
 

@@ -78,6 +78,13 @@
 				VeraAlexa1.reset(lul_device)
 			</run>
 		</action>
+		<action>
+			<serviceId>urn:bochicchio-com:serviceId:VeraAlexa1</serviceId>
+			<name>UpdateDevices</name>
+			<run>
+				VeraAlexa1.updateDevices(lul_device)
+			</run>
+		</action>
 
 		<action>
 			<serviceId>urn:dlna-org:serviceId:DLNAMediaController1</serviceId>
