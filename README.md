@@ -101,7 +101,7 @@ When *jq* package is installed, the plug-in will automatically switch to the ava
 On OpenLuup you can add *jq* via your OS package manager.
 [OAthTool](https://www.nongnu.org/oath-toolkit/man-oathtool.html) is supported too.
 
-# Use in code: Routines (requires jq)
+# Actions: Routines (requires jq)
 Routines are only supported with *jq*:
 
 ```
@@ -110,13 +110,22 @@ luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1",
   {RoutineName="YourRoutineName", GroupZones="Bedroom"}, 666)
 ```
 
-# Use in code: Generic commands (requires jq)
+# Actions: Generic commands (requires jq)
 Commands are only supported with *jq*:
 
 ```
 luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1", 
   "RunCommand",
   {Command="-e weather -d 'Bedroom'"}, 666)
+```
+
+# LastAlexa
+You could specify *LASTALEXA* as a special device, to execute the command (TTS, automation) on the Last Alexa device you've interacted with:
+
+```
+luup.call_action("urn:bochicchio-com:serviceId:VeraAlexa1", 
+  "Say",
+  {Text="Hello from your last used Alexa device", Volume=50, GroupZones="LASTALEXA", Repeat = 3}, 666)
 ```
 
 Please see https://github.com/thorsten-gehrig/alexa-remote-control/blob/master/alexa_remote_control.sh for a complete list of supported commands.

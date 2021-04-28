@@ -7,7 +7,7 @@
 module("L_VeraAlexa1", package.seeall)
 
 local _PLUGIN_NAME = "VeraAlexa"
-local _PLUGIN_VERSION = "0.95"
+local _PLUGIN_VERSION = "0.97"
 
 local devMode = false
 local debugMode = false
@@ -20,6 +20,7 @@ local HASID									= "urn:micasaverde-com:serviceId:HaDevice1"
 -- COMMANDS
 local COMMANDS_SPEAK						= "-e speak:%q -d %q"
 local COMMANDS_ROUTINE						= "-e automation:%q -d %q"
+local COMMANDS_LASTALEXA					= "-lastalexa"
 local COMMANDS_SETVOLUME					= "-e vol:%s -d %q"
 local COMMANDS_GETVOLUME					= "-q -d %q | sed ':a;N;$!ba;s/\\n/ /g' | grep 'volume' | sed -r 's/^.*\"volume\":\\s*([0-9]+)[^0-9]*$/\\1/g'"
 local BIN_PATH								= "/storage/alexa"
@@ -313,7 +314,7 @@ local function executeCommand(devNum, command)
 end
 
 local function buildCommand(devNum, settings)
-	local args = "export EMAIL=%q && export PASSWORD=%q && export MFASECRET=%q && export NORMALVOL=%s && export SPEAKVOL=%s && export TTS_LOCALE=%s && export LANGUAGE=%s && export AMAZON=%s && export ALEXA=%s && export USE_ANNOUNCEMENT_FOR_SPEAK=%s && export TMP=%q && %s/" .. SCRIPT_NAME .. " "
+	local args = "export EMAIL=%q && export PASSWORD=%q && export MFASECRET=%q && export NORMALVOL=%q && export SPEAKVOL=%q && export TTS_LOCALE=%q && export LANGUAGE=%q && export AMAZON=%q && export ALEXA=%q && export USE_ANNOUNCEMENT_FOR_SPEAK=%q && export TMP=%q && %s/" .. SCRIPT_NAME .. " "
 	local username = getVar(MYSID, "Username", "", devNum)
 	local password = getVar(MYSID, "Password", "", devNum) .. getVar(MYSID, "OneTimePassCode", "", devNum)
 	local mfaSecret = getVar(MYSID, "MFASecret", "", devNum)
@@ -325,6 +326,13 @@ local function buildCommand(devNum, settings)
 	local language = getVar(MYSID, "Language", "", devNum)
 	local useAnnoucements = getVarNumeric(MYSID, "UseAnnoucements", 0, devNum)
 
+	local device = settings.GroupZones or settings.GroupDevices or defaultDevice
+	if device == "LASTALEXA" then
+		device = getLastAlexa(devNum, settings) or defaultDevice
+		settings.GroupZones = device
+		D(devNum, "Getting Last Alexa: %1", device)
+	end
+
 	local command = string.format(args, username, password, mfaSecret,
 										(defaultVolume or announcementVolume),
 										(settings.Volume or announcementVolume),
@@ -333,22 +341,22 @@ local function buildCommand(devNum, settings)
 										useAnnoucements,
 										BIN_PATH, BIN_PATH,
 										(settings.Text or "Test"),
-										(settings.GroupZones or settings.GroupDevices or defaultDevice))
+										device)
 
 	-- reset onetimepass
 	setVar(MYSID, "OneTimePassCode", "", devNum)
-	return command
+	return command, settings
 end
 
 function sayTTS(devNum, settings)
 	local defaultDevice = getVar(MYSID, "DefaultEcho", "", devNum)
 	local text = (settings.Text or "Test")
 
+	local command, newSettings = buildCommand(devNum, settings)
 	local args = string.format(COMMANDS_SPEAK,
-									text,
-									(settings.GroupZones or settings.GroupDevices or defaultDevice))
-
-	local command = buildCommand(devNum, settings) .. args
+								text,
+								(newSettings.GroupZones or newSettings.GroupDevices or defaultDevice))
+	command = command .. args
 
 	D(devNum, "Executing command [TTS]: %1", args)
 	executeCommand(devNum, command)
@@ -370,21 +378,32 @@ end
 function runRoutine(devNum, settings)
 	local defaultDevice = getVar(MYSID, "DefaultEcho", "", devNum)
 
+	local command, newSettings = buildCommand(devNum, settings)
 	local args = string.format(COMMANDS_ROUTINE,
-									settings.RoutineName,
-									(settings.GroupZones or settings.GroupDevices or defaultDevice))
-	local command = buildCommand(devNum, settings) .. args
+									newSettings.RoutineName,
+									(newSettings.GroupZones or newSettings.GroupDevices or defaultDevice))
+									
+	command = command .. args
 
 	D(devNum, "Executing command [runRoutine]: %1", args)
 	executeCommand(devNum, command)
 end
 
 function runCommand(devNum, settings)
-	local command = buildCommand(devNum, settings) ..
-					settings.Command
+	local command = buildCommand(devNum, settings) .. settings.Command
 
 	D(devNum, "Executing command [runCommand]: %1", settings.Command)
 	executeCommand(devNum, command)
+end
+
+function getLastAlexa(devNum, settings)
+	settings.GroupZones = 'NULL'
+	settings.GroupDevices = 'NULL'
+	
+	local command = buildCommand(devNum, settings) .. COMMANDS_LASTALEXA
+	local response = executeCommand(devNum, command)
+	D(devNum, "Executing command [lastAelxa]: %1", response)
+	return response
 end
 
 function setVolume(volume, devNum, settings)
@@ -435,8 +454,7 @@ function setupScripts(devNum)
 	-- install jq
 	local currentVer = tonumber(luup.short_version or "1")
 	if not openLuup and currentVer >= 7.32 then
-		executeCommand(devNum, "opkg update")
-		executeCommand(devNum, "opkg --force-depends install jq")
+		executeCommand(devNum, "opkg update && opkg --force-depends install jq")
 	end
 
 	-- first command must be executed to create cookie and setup the environment
